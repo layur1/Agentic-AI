@@ -1,0 +1,22 @@
+# --- LLM + Agent orchestration ---
+langchain
+langchain-groq
+langgraph
+langchain-mcp-adapters
+
+# --- MCP ---
+mcp
+
+# --- PDF ingestion + vector search ---
+pypdf
+langchain-community
+langchain-huggingface
+langchain-chroma
+sentence-transformers
+chromadb
+
+# --- MySQL ---
+mysql-connector-python
+
+# --- Utilities ---
+python-dotenv
