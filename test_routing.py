@@ -3,8 +3,6 @@ Fires a batch of sample questions at the agent and prints which tool(s)
 it chose for each one, so you can verify routing quality before trusting
 the full CLI.
 
-Save this file directly in your project root (D:\\agentic_ai), the same
-folder as brain.py.
 
 Run:
     python test_routing.py

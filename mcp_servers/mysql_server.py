@@ -1,7 +1,7 @@
 """
-FastMCP server exposing MySQL product data as tools.
+FastMCP server exposing MySQL product and user data as tools.
 
-Exposes three tools: get_price, check_stock, search_products.
+Exposes four tools: get_price, check_stock, search_products, get_user_address.
 
 Run standalone for debugging:
     python mcp_servers/mysql_server.py
@@ -124,6 +124,62 @@ def search_products(query: str) -> str:
         for r in rows
     ]
     return "\n".join(lines)
+
+
+@mcp.tool()
+def get_user_address(user_name: str) -> str:
+    """
+    Get the home address of a specific named customer from the customer
+    database.
+
+    IMPORTANT: This tool requires a specific person's name. If the question
+    refers to a user without naming them — for example "his address",
+    "her address", "their address", or "the customer's address" — do NOT
+    call this tool and do NOT guess or invent a name. Instead, respond by
+    asking the user directly which person's name they mean, and wait for
+    their answer in a future message before calling this tool.
+
+    IMPORTANT: More than one customer may share the same or a similar name
+    (for example, two customers both named "John"). If this tool reports
+    that multiple customers match, do NOT guess or arbitrarily pick one of
+    them. Instead, relay the list of matching names back to the user exactly
+    as returned, ask them which specific person they mean, and wait for
+    their reply — ideally the person's full name — before calling this tool
+    again.
+
+    Args:
+        user_name: The exact or approximate name of the customer,
+            e.g. "John Perera". Must be an actual name mentioned in the
+            conversation, never a placeholder or guess.
+
+    Returns:
+        The customer's address if exactly one match is found; a message
+        listing all matching names if more than one customer matches; or a
+        not-found message if no matching user exists.
+    """
+    conn = _get_connection()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute(
+        "SELECT name, address FROM users WHERE name LIKE %s",
+        (f"%{user_name}%",),
+    )
+    rows = cursor.fetchall()
+    cursor.close()
+    conn.close()
+
+    if not rows:
+        return f"No user found matching '{user_name}'."
+
+    if len(rows) > 1:
+        matching_names = ", ".join(r["name"] for r in rows)
+        return (
+            f"Multiple customers match '{user_name}': {matching_names}. "
+            f"Please ask the user which specific person they mean "
+            f"(ideally by full name) before looking up an address."
+        )
+
+    row = rows[0]
+    return f"{row['name']}'s address: {row['address']}"
 
 
 if __name__ == "__main__":

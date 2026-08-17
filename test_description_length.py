@@ -2,9 +2,6 @@
 Tests how the LENGTH and WORDING of a tool's description affects routing
 accuracy.
 
-Save this file directly in your project root (D:\\agentic_ai), the same
-folder as config.py.
-
 Run:
     python test_description_length.py
 """

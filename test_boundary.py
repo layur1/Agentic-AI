@@ -3,9 +3,6 @@ Boundary / failure-mode test battery. Sends deliberately awkward inputs
 and reports HOW the system failed (wrong tool, no tool, error, timeout,
 hallucinated answer) rather than just whether it "worked".
 
-Save this file directly in your project root (D:\\agentic_ai), the same
-folder as brain.py, config.py, and chat_cli.py.
-
 Run:
     python test_boundary.py
 """
