@@ -1,13 +1,3 @@
-"""
-One-time (or re-run-on-update) ingestion script.
-
-Loads the PDF(s) in data/, splits them into chunks, embeds them locally
-using a HuggingFace sentence-transformer, and saves a Chroma vectorstore
-to disk.
-
-Run this whenever you add/replace a PDF:
-    python ingest_pdf.py
-"""
 import os
 import glob
 import shutil

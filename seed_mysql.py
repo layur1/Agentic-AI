@@ -1,13 +1,3 @@
-"""
-One-time (or re-run-to-reset) script to create the database/tables and
-seed sample data into MySQL. Seeds two tables:
-  - products : existing product catalog (price, stock, category)
-  - users    : customer records (name, address) for the address-lookup
-               clarification scenario
-
-Run:
-    python seed_mysql.py
-"""
 import mysql.connector
 import config
 

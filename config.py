@@ -1,7 +1,3 @@
-"""
-Centralized configuration. Loads everything from .env so no secrets
-or environment-specific paths are hardcoded elsewhere in the codebase.
-"""
 import os
 from dotenv import load_dotenv
 

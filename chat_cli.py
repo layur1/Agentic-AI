@@ -1,9 +1,3 @@
-"""
-Simple interactive command-line chat interface.
-
-Run:
-    python chat_cli.py
-"""
 import asyncio
 from brain import build_agent, ask
 

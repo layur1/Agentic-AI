@@ -1,14 +1,3 @@
-"""
-Tests the clarification scenario: asking for "his address" without naming
-anyone should make the agent ask a follow-up question instead of guessing
-or calling the tool with no name. Providing the name in the next message
-should then correctly return that person's address.
-
-Save in your project root (D:\\agentic_ai), same folder as brain.py.
-
-Run:
-    python test_clarification.py
-"""
 import asyncio
 from brain import build_agent, ask
 

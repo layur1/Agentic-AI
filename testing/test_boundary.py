@@ -1,11 +1,3 @@
-"""
-Boundary / failure-mode test battery. Sends deliberately awkward inputs
-and reports HOW the system failed (wrong tool, no tool, error, timeout,
-hallucinated answer) rather than just whether it "worked".
-
-Run:
-    python test_boundary.py
-"""
 import asyncio
 import time
 from brain import build_agent
