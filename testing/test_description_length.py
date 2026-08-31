@@ -2,23 +2,23 @@
 Tests how the LENGTH and WORDING of a tool's description affects routing
 accuracy.
 
-Run:
-    python test_description_length.py
+Run from the project root:
+    python testing/test_description_length.py
 """
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import asyncio
 import time
 
 from langchain_core.tools import tool
 from langchain_chroma import Chroma
 from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_groq import ChatGroq
+from langchain_openai import ChatOpenAI
 from langgraph.prebuilt import create_react_agent
 
 import config
-
-# ---------------------------------------------------------------------
-# Three description variants for the SAME underlying function.
-# ---------------------------------------------------------------------
 
 DESCRIPTIONS = {
     "TOO_SHORT": "Searches documents.",
@@ -49,7 +49,6 @@ DESCRIPTIONS = {
     ),
 }
 
-# Fixed test battery — deliberately includes some easy and some ambiguous cases
 TEST_QUESTIONS = [
     ("What is the warranty on Laptop A?", "search_pdf"),
     ("How do I maximize battery life on Laptop A?", "search_pdf"),
@@ -75,8 +74,8 @@ def build_pdf_tool(description: str):
 
 
 async def run_variant(name: str, description: str):
-    config.require_groq_key()
-    llm = ChatGroq(model=config.GROQ_MODEL, temperature=0, api_key=config.GROQ_API_KEY)
+    config.require_openai_key()
+    llm = ChatOpenAI(model=config.OPENAI_MODEL, temperature=0, api_key=config.OPENAI_API_KEY)
     tool_fn = build_pdf_tool(description)
     agent = create_react_agent(llm, tools=[tool_fn])
 

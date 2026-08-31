@@ -3,10 +3,13 @@ Fires a batch of sample questions at the agent and prints which tool(s)
 it chose for each one, so you can verify routing quality before trusting
 the full CLI.
 
-
-Run:
-    python test_routing.py
+Run from the project root:
+    python testing/test_routing.py
 """
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import asyncio
 from brain import build_agent
 

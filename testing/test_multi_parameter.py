@@ -1,14 +1,15 @@
 """
 Tests multi-parameter clarification handling: a 2-required-parameter tool
-(get_weather_alert: city + date) and a 3-required-parameter tool
-(schedule_delivery: customer + product + date), including the case where
-one of several parameters is individually ambiguous.
+(get_weather_alert-style pattern is now covered by schedule_delivery's
+3-parameter case below) and ambiguity within a multi-parameter tool.
 
-Save in your project root (D:\\agentic_ai), same folder as brain.py.
-
-Run:
-    python test_multi_parameter.py
+Run from the project root:
+    python testing/test_multi_parameter.py
 """
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import asyncio
 from brain import build_agent, ask
 
@@ -27,25 +28,6 @@ async def run_scenario(agent, label, turns):
 async def main():
     agent = await build_agent()
 
-    # --- 2-parameter tool: get_weather_alert(city, date) ---
-
-    await run_scenario(agent, "Weather alert - both given at once", [
-        "Are there any weather alerts for Colombo on 2026-08-25?",
-    ])
-
-    await run_scenario(agent, "Weather alert - both missing", [
-        "Are there any severe weather alerts?",
-        "Colombo, for 2026-08-25",
-    ])
-
-    await run_scenario(agent, "Weather alert - given one at a time", [
-        "Are there any weather alerts?",
-        "Colombo",
-        "2026-08-25",
-    ])
-
-    # --- 3-parameter tool: schedule_delivery(customer, product, date) ---
-
     await run_scenario(agent, "Schedule delivery - all three given at once", [
         "Schedule a delivery of the Wireless Mouse M1 for Amaya Silva on 2026-09-01.",
     ])
@@ -53,6 +35,13 @@ async def main():
     await run_scenario(agent, "Schedule delivery - nothing given", [
         "Can you schedule a delivery for me?",
         "Amaya Silva, Wireless Mouse M1, 2026-09-01",
+    ])
+
+    await run_scenario(agent, "Schedule delivery - given one piece at a time", [
+        "I want to schedule a delivery.",
+        "The customer is Amaya Silva.",
+        "It's for the Wireless Mouse M1.",
+        "Deliver it on 2026-09-01.",
     ])
 
     await run_scenario(agent, "Schedule delivery - ambiguous customer name", [

@@ -3,7 +3,7 @@ from brain import build_agent, ask
 
 
 async def main():
-    print("Building agent ...")
+    print("Building agent (connecting to PDF + MySQL MCP servers)...")
     agent = await build_agent()
     print("Ready. Ask a question about TechNova products (type 'exit' to quit).\n")
 

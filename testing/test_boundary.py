@@ -1,9 +1,20 @@
+"""
+Boundary / failure-mode test battery. Sends deliberately awkward inputs
+and reports HOW the system failed (wrong tool, no tool, error, timeout,
+hallucinated answer) rather than just whether it "worked".
+
+Run from the project root:
+    python testing/test_boundary.py
+"""
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import asyncio
 import time
 from brain import build_agent
 
 BOUNDARY_CASES = [
-    # (label, question, what we're checking for)
     ("empty_input", "", "Does it crash on empty string, or handle gracefully?"),
     ("whitespace_only", "     ", "Same as above but with whitespace."),
     ("gibberish", "asdkfj weoiru xzcv laptop??? price$$$", "Does routing still work with noise?"),

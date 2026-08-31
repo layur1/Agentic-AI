@@ -1,9 +1,9 @@
 """
-The agent's brain: connects to three MCP servers (PDF + MySQL + Weather),
-loads their tools, and wires them into a Groq-powered ReAct agent.
+The agent's brain: connects to two MCP servers (PDF + MySQL), loads their
+tools, and wires them into an OpenAI-powered ReAct agent.
 """
 import os
-from langchain_groq import ChatGroq
+from langchain_openai import ChatOpenAI
 from langgraph.prebuilt import create_react_agent
 from langchain_mcp_adapters.client import MultiServerMCPClient
 
@@ -17,17 +17,19 @@ You have access to four kinds of tools:
    Use for: warranty policy, specifications, how something works, battery
    and maintenance guidance, troubleshooting steps.
 
-2. MySQL product database tools (get_price, check_stock, search_products)
-   Use for: current price, stock/inventory availability, browsing products
-   by category.
+2. Product lookup tools (get_price, check_stock, search_products,
+   get_products_by_price_range)
+   Use for: current price, stock/inventory availability, browsing
+   products by category, or filtering by a numeric price range.
 
-3. MySQL customer and delivery tools (get_user_address, schedule_delivery)
-   Use for: retrieving a specific named customer's address, or scheduling
-   a product delivery for a customer on a date.
+3. Customer tools (get_user_address, search_customers, add_new_customer)
+   Use for: retrieving a specific named customer's address, browsing/
+   searching customer names without revealing addresses, or registering
+   a new customer.
 
-4. Weather tools (get_current_weather, get_weather_forecast, get_weather_alert)
-   Use for: current or upcoming weather conditions, or severe weather
-   alerts, for a Sri Lankan city.
+4. Delivery tools (schedule_delivery, get_delivery_status, cancel_delivery)
+   Use for: scheduling a new delivery, checking a customer's scheduled
+   deliveries, or cancelling an existing one.
 
 General rules:
 - Always choose the most relevant tool(s) for the question. If a question
@@ -38,16 +40,20 @@ General rules:
 - NEVER call a tool with a guessed, assumed, empty, or placeholder value
   for a required argument. Some tools require MORE THAN ONE piece of
   information (for example, schedule_delivery needs a customer, a
-  product, AND a date; get_weather_alert needs a city AND a date). If any
-  required piece is missing, do not call the tool. Instead, ask the user
-  for whichever piece(s) are missing — you may ask for several missing
-  pieces in a single question — and wait for their reply before calling
-  the tool. If the user then supplies some but not all of what's still
-  missing, ask again for only what remains, rather than guessing or
-  giving up.
+  product, AND a date). If any required piece is missing, do not call the
+  tool. Instead, ask the user for whichever piece(s) are missing — you
+  may ask for several missing pieces in a single question — and wait for
+  their reply before calling the tool. If the user then supplies some but
+  not all of what's still missing, ask again for only what remains,
+  rather than guessing or giving up.
 - If a tool reports that a name or value you provided matched more than
   one record, do not guess which one was meant — relay the list of
   matches to the user as a question and wait for their reply.
+- Several tools have similar names or purposes (for example,
+  get_user_address vs search_customers, or get_price vs
+  get_products_by_price_range). Read each tool's description carefully to
+  pick the one that actually matches what the user is asking for, rather
+  than the first plausible-sounding name.
 """
 
 _this_dir = os.path.dirname(os.path.abspath(__file__))
@@ -63,24 +69,19 @@ _client = MultiServerMCPClient({
         "args": [os.path.join(_this_dir, "mcp_servers", "mysql_server.py")],
         "transport": "stdio",
     },
-    "weather": {
-        "command": "python",
-        "args": [os.path.join(_this_dir, "mcp_servers", "weather_server.py")],
-        "transport": "stdio",
-    },
 })
 
 
 async def build_agent():
-    """Fetches tools from all three MCP servers and builds the ReAct agent."""
-    config.require_groq_key()
+    """Fetches tools from both MCP servers and builds the ReAct agent."""
+    config.require_openai_key()
 
     tools = await _client.get_tools()
 
-    llm = ChatGroq(
-        model=config.GROQ_MODEL,
+    llm = ChatOpenAI(
+        model=config.OPENAI_MODEL,
         temperature=0,
-        api_key=config.GROQ_API_KEY,
+        api_key=config.OPENAI_API_KEY,
     )
 
     agent = create_react_agent(llm, tools=tools, prompt=SYSTEM_PROMPT)

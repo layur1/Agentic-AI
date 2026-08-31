@@ -1,12 +1,3 @@
-"""
-FastMCP server exposing PDF search as a tool.
-
-Loads the pre-built Chroma vectorstore (see ingest_pdf.py) and exposes
-a single tool: search_pdf(query).
-
-Run standalone for debugging:
-    python mcp_servers/pdf_server.py
-"""
 import sys
 import os
 
@@ -36,8 +27,8 @@ def search_pdf(query: str) -> str:
 
     Use this tool for questions about static documentation: warranty terms,
     how something works, specs, maintenance tips, or troubleshooting steps.
-    Do NOT use this for prices, stock levels, or anything that changes
-    frequently — use the MongoDB tool for that instead.
+    Do NOT use this for prices, stock levels, customer addresses, or
+    anything that changes frequently — use the MySQL tools for that instead.
 
     Args:
         query: The user's question or the topic to search for.

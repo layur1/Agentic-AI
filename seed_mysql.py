@@ -1,3 +1,7 @@
+"""
+Run:
+    python seed_mysql.py
+"""
 import mysql.connector
 import config
 
@@ -46,7 +50,7 @@ def seed():
         SAMPLE_PRODUCTS,
     )
 
-    # --- users table (for the address-lookup clarification scenario) ---
+    # --- users table ---
     cursor.execute("DROP TABLE IF EXISTS users")
     cursor.execute("""
         CREATE TABLE users (

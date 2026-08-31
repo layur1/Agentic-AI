@@ -1,3 +1,7 @@
+"""
+Run this whenever you add/replace a PDF:
+    python ingest_pdf.py
+"""
 import os
 import glob
 import shutil
@@ -41,7 +45,6 @@ def build_vectorstore():
     print(f"Loading embedding model: {config.EMBEDDING_MODEL} (first run downloads the model)")
     embeddings = HuggingFaceEmbeddings(model_name=config.EMBEDDING_MODEL)
 
-    # Wipe any existing index so re-running this script doesn't duplicate chunks
     if os.path.exists(config.VECTORSTORE_PATH):
         shutil.rmtree(config.VECTORSTORE_PATH)
     os.makedirs(config.VECTORSTORE_PATH, exist_ok=True)

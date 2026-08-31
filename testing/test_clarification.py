@@ -1,3 +1,15 @@
+"""
+Tests the clarification and disambiguation scenarios: missing name,
+name given immediately, nonexistent name, and an ambiguous name matching
+more than one customer.
+
+Run from the project root:
+    python testing/test_clarification.py
+"""
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import asyncio
 from brain import build_agent, ask
 
@@ -16,29 +28,19 @@ async def run_scenario(agent, label, turns):
 async def main():
     agent = await build_agent()
 
-    # Scenario 1: the exact case you described — ask without a name first,
-    # confirm the agent asks a clarifying question, then supply the name.
     await run_scenario(agent, "Missing name, then provided", [
         "Can you give me his address?",
         "John Perera",
     ])
 
-    # Scenario 2: name given immediately — should answer directly, no
-    # clarifying question needed, single tool call.
     await run_scenario(agent, "Name given immediately", [
         "What is Amaya Silva's address?",
     ])
 
-    # Scenario 3: name that doesn't exist — should say not found, not
-    # invent an address.
     await run_scenario(agent, "Nonexistent user", [
         "What is the address of Michael Johnson?",
     ])
 
-    # Scenario 4: ambiguous name — TWO customers match "John" (John Perera
-    # and John Fernando). The agent should list both and ask which one,
-    # NOT silently pick one. Providing the full name should then resolve
-    # it correctly.
     await run_scenario(agent, "Ambiguous name (two Johns)", [
         "What is John's address?",
         "John Fernando",

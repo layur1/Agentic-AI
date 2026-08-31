@@ -1,6 +1,6 @@
 # --- LLM + Agent orchestration ---
 langchain
-langchain-groq
+langchain-openai
 langgraph
 langchain-mcp-adapters
 
@@ -17,6 +17,7 @@ chromadb
 
 # --- MySQL ---
 mysql-connector-python
+dnspython
 
 # --- Utilities ---
 python-dotenv
