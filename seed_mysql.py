@@ -1,7 +1,3 @@
-"""
-Run:
-    python seed_mysql.py
-"""
 import mysql.connector
 import config
 

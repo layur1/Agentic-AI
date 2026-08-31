@@ -1,7 +1,3 @@
-"""
-The agent's brain: connects to two MCP servers (PDF + MySQL), loads their
-tools, and wires them into an OpenAI-powered ReAct agent.
-"""
 import os
 from langchain_openai import ChatOpenAI
 from langgraph.prebuilt import create_react_agent
@@ -73,7 +69,6 @@ _client = MultiServerMCPClient({
 
 
 async def build_agent():
-    """Fetches tools from both MCP servers and builds the ReAct agent."""
     config.require_openai_key()
 
     tools = await _client.get_tools()
@@ -89,10 +84,7 @@ async def build_agent():
 
 
 async def ask(agent, question: str, history=None) -> str:
-    """
-    Sends a question (with optional prior conversation history) to the
-    agent and returns the final text answer.
-    """
+   
     messages = (history or []) + [{"role": "user", "content": question}]
     response = await agent.ainvoke({"messages": messages})
     final_message = response["messages"][-1]
