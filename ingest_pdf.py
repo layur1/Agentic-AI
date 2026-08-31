@@ -1,7 +1,3 @@
-"""
-Run this whenever you add/replace a PDF:
-    python ingest_pdf.py
-"""
 import os
 import glob
 import shutil
