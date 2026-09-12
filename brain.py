@@ -1,76 +1,112 @@
 import os
+import sys
+
 from langchain_openai import ChatOpenAI
 from langgraph.prebuilt import create_react_agent
 from langchain_mcp_adapters.client import MultiServerMCPClient
 
 import config
 
-SYSTEM_PROMPT = """You are a helpful assistant for TechNova Electronics.
 
-You have access to four kinds of tools:
+SYSTEM_PROMPT = """
+You are a helpful assistant for TechNova Electronics.
 
-1. PDF documentation search (search_pdf)
-   Use for: warranty policy, specifications, how something works, battery
-   and maintenance guidance, troubleshooting steps.
+You have access to tools provided by MCP servers.
 
-2. Product lookup tools (get_price, check_stock, search_products,
-   get_products_by_price_range)
-   Use for: current price, stock/inventory availability, browsing
-   products by category, or filtering by a numeric price range.
-
-3. Customer tools (get_user_address, search_customers, add_new_customer)
-   Use for: retrieving a specific named customer's address, browsing/
-   searching customer names without revealing addresses, or registering
-   a new customer.
-
-4. Delivery tools (schedule_delivery, get_delivery_status, cancel_delivery)
-   Use for: scheduling a new delivery, checking a customer's scheduled
-   deliveries, or cancelling an existing one.
+Use the available tools to answer the user's questions accurately.
 
 General rules:
-- Always choose the most relevant tool(s) for the question. If a question
-  needs information from more than one category, call each relevant tool
-  and combine the results into one clear answer.
-- If no tool returns relevant information, say so honestly rather than
-  guessing.
-- NEVER call a tool with a guessed, assumed, empty, or placeholder value
-  for a required argument. Some tools require MORE THAN ONE piece of
-  information (for example, schedule_delivery needs a customer, a
-  product, AND a date). If any required piece is missing, do not call the
-  tool. Instead, ask the user for whichever piece(s) are missing — you
-  may ask for several missing pieces in a single question — and wait for
-  their reply before calling the tool. If the user then supplies some but
-  not all of what's still missing, ask again for only what remains,
-  rather than guessing or giving up.
-- If a tool reports that a name or value you provided matched more than
-  one record, do not guess which one was meant — relay the list of
-  matches to the user as a question and wait for their reply.
-- Several tools have similar names or purposes (for example,
-  get_user_address vs search_customers, or get_price vs
-  get_products_by_price_range). Read each tool's description carefully to
-  pick the one that actually matches what the user is asking for, rather
-  than the first plausible-sounding name.
+
+1. Select tools based on their names, descriptions, input schemas,
+   and the user's request.
+
+2. If a question requires multiple tools, use all relevant tools
+   and combine their results into one clear answer.
+
+3. Do not guess information that should be obtained from a tool.
+
+4. Never provide guessed, empty, or placeholder values for required
+   tool arguments.
+
+5. If a required argument is missing, ask the user for the missing
+   information before calling the tool.
+
+6. If a tool reports that multiple records match the supplied value,
+   do not choose one arbitrarily. Ask the user to clarify.
+
+7. If a tool returns no relevant information, say so honestly.
+
+8. Do not expose internal tool names, implementation details,
+   SQL queries, or MCP protocol details unless the user specifically
+   asks about them.
+
+9. Base answers on information returned by the available tools.
+   Do not invent information.
+
+10. Treat the supplied conversation history as belonging only to the
+    current user session. Never assume that information from another
+    session or user belongs to the current conversation.
 """
 
-_this_dir = os.path.dirname(os.path.abspath(__file__))
 
-_client = MultiServerMCPClient({
-    "pdf": {
-        "command": "python",
-        "args": [os.path.join(_this_dir, "mcp_servers", "pdf_server.py")],
-        "transport": "stdio",
-    },
-    "mysql": {
-        "command": "python",
-        "args": [os.path.join(_this_dir, "mcp_servers", "mysql_server.py")],
-        "transport": "stdio",
-    },
-})
+_THIS_DIR = os.path.dirname(os.path.abspath(__file__))
+_MCP_SERVERS_DIR = os.path.join(_THIS_DIR, "mcp_servers")
+
+
+def discover_mcp_servers() -> dict:
+    """
+    Automatically discover MCP server files.
+
+    Every Python file inside the mcp_servers directory whose name
+    ends with '_server.py' is treated as an MCP server.
+    """
+
+    servers = {}
+
+    if not os.path.isdir(_MCP_SERVERS_DIR):
+        raise RuntimeError(
+            f"MCP server directory not found: {_MCP_SERVERS_DIR}"
+        )
+
+    for filename in sorted(os.listdir(_MCP_SERVERS_DIR)):
+
+        if not filename.endswith("_server.py"):
+            continue
+
+        server_name = filename[:-len("_server.py")]
+
+        server_path = os.path.join(
+            _MCP_SERVERS_DIR,
+            filename
+        )
+
+        servers[server_name] = {
+            "command": sys.executable,
+            "args": [server_path],
+            "transport": "stdio",
+        }
+
+    if not servers:
+        raise RuntimeError(
+            f"No MCP servers found in {_MCP_SERVERS_DIR}"
+        )
+
+    return servers
+
+
+# The brain does not contain individual tool names.
+# It automatically discovers MCP servers.
+_client = MultiServerMCPClient(
+    discover_mcp_servers()
+)
 
 
 async def build_agent():
+
     config.require_openai_key()
 
+    # MCP servers provide the tools, descriptions,
+    # and input schemas.
     tools = await _client.get_tools()
 
     llm = ChatOpenAI(
@@ -79,13 +115,34 @@ async def build_agent():
         api_key=config.OPENAI_API_KEY,
     )
 
-    agent = create_react_agent(llm, tools=tools, prompt=SYSTEM_PROMPT)
+    agent = create_react_agent(
+        llm,
+        tools=tools,
+        prompt=SYSTEM_PROMPT,
+    )
+
     return agent
 
 
-async def ask(agent, question: str, history=None) -> str:
-   
-    messages = (history or []) + [{"role": "user", "content": question}]
-    response = await agent.ainvoke({"messages": messages})
+async def ask(
+    agent,
+    question: str,
+    history=None
+) -> str:
+
+    messages = (history or []) + [
+        {
+            "role": "user",
+            "content": question,
+        }
+    ]
+
+    response = await agent.ainvoke(
+        {
+            "messages": messages
+        }
+    )
+
     final_message = response["messages"][-1]
+
     return final_message.content

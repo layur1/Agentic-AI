@@ -3,6 +3,7 @@ langchain
 langchain-openai
 langgraph
 langchain-mcp-adapters
+openai
 
 # --- MCP ---
 mcp
@@ -18,6 +19,10 @@ chromadb
 # --- MySQL ---
 mysql-connector-python
 dnspython
+
+# --- Multi-user API server ---
+fastapi
+uvicorn
 
 # --- Utilities ---
 python-dotenv
