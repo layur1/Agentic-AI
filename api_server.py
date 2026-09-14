@@ -1,14 +1,15 @@
+import logging
 import asyncio
 import contextlib
-import logging
 
-from fastapi import FastAPI, HTTPException, Header
+from fastapi import FastAPI, HTTPException, Header, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, field_validator
 from openai import RateLimitError
 
 import config
+import db_history
 from brain import build_agent, ask
-from session_manager import SessionManager
 
 
 logging.basicConfig(level=logging.INFO)
@@ -16,20 +17,29 @@ logger = logging.getLogger("api_server")
 
 
 # ============================================================
-# SESSION MANAGER
-# ============================================================
-
-session_manager = SessionManager(
-    session_ttl_seconds=3600,
-    max_requests_per_minute=config.MAX_REQUESTS_PER_SESSION_PER_MINUTE,
-)
-
-
-# ============================================================
 # SHARED AGENT
 # ============================================================
+#
+# One agent is built at startup and reused for every request, since
+# rebuilding it (reconnecting to both MCP servers) on every message
+# would be far too slow. Conversation history is what's kept separate
+# per user -- see db_history.py -- not the agent itself.
 
 _agent = None
+
+
+# ============================================================
+# ONE SIMPLE LOCK
+# ============================================================
+#
+# Only needed to stop two rapid requests from reading -> generating ->
+# saving at the same time and stepping on each other's history. A
+# single global lock is simpler than a lock per session and is more
+# than fast enough at this application's scale -- it just means two
+# people's messages are answered one after another rather than at the
+# exact same instant, which is not noticeable in practice.
+
+_lock = asyncio.Lock()
 
 
 # ============================================================
@@ -56,50 +66,15 @@ class ChatRequest(BaseModel):
 # ============================================================
 # AUTH DEPENDENCY
 # ============================================================
-#
-# Checks a single SHARED secret sent in the X-API-Key header on every
-# request. This stops unauthenticated/unknown callers from reaching the
-# API at all. It does NOT give individual users their own identity --
-# see the note in config.py for exactly what this does and doesn't
-# protect against.
 
 async def verify_api_key(x_api_key: str | None = Header(default=None)):
     if not config.APP_API_KEY:
-        # Fail loudly at request time if the server was misconfigured,
-        # rather than silently accepting every request with no key set.
         raise HTTPException(
             status_code=500,
             detail="Server misconfiguration: APP_API_KEY is not set.",
         )
     if x_api_key != config.APP_API_KEY:
         raise HTTPException(status_code=401, detail="Invalid or missing API key.")
-
-
-# ============================================================
-# SESSION CLEANUP
-# ============================================================
-
-async def cleanup_loop():
-
-    while True:
-
-        try:
-
-            await asyncio.sleep(600)
-
-            removed = await session_manager.cleanup_expired()
-
-            if removed > 0:
-
-                logger.info(f"Removed {removed} expired session(s).")
-
-        except asyncio.CancelledError:
-
-            raise
-
-        except Exception as error:
-
-            logger.error(f"Session cleanup error: {error}")
 
 
 # ============================================================
@@ -113,26 +88,13 @@ async def lifespan(app: FastAPI):
 
     config.require_app_api_key()
 
+    # Make sure the chat_history table exists before anything else runs.
+    db_history.init_db()
+
     # Build the shared agent once.
     _agent = await build_agent()
 
-    cleanup_task = asyncio.create_task(
-        cleanup_loop()
-    )
-
-    try:
-
-        yield
-
-    finally:
-
-        cleanup_task.cancel()
-
-        with contextlib.suppress(
-            asyncio.CancelledError
-        ):
-
-            await cleanup_task
+    yield
 
 
 # ============================================================
@@ -146,10 +108,30 @@ app = FastAPI(
 
 
 # ============================================================
+# SAFETY NET: never let ANY unhandled error return a non-JSON body
+# ============================================================
+#
+# Every route above already catches its own expected failures. This
+# catch-all exists purely so that a genuinely unexpected bug (e.g. a
+# typo in a future change) still returns clean JSON instead of
+# Starlette's default plain-text error page -- which is what caused a
+# confusing "JSONDecodeError" on the CLIENT side rather than a clear
+# message, the first time this happened.
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    logger.exception(f"Unhandled error on {request.url.path}")
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Something went wrong on the server. Please try again."},
+    )
+
+
+# ============================================================
 # CHAT ENDPOINT
 # ============================================================
 
-@app.post("/chat", dependencies=[])
+@app.post("/chat")
 async def chat(request: ChatRequest, x_api_key: str | None = Header(default=None)):
 
     await verify_api_key(x_api_key)
@@ -157,11 +139,7 @@ async def chat(request: ChatRequest, x_api_key: str | None = Header(default=None
     global _agent
 
     if _agent is None:
-
-        raise HTTPException(
-            status_code=503,
-            detail="Agent is not ready."
-        )
+        raise HTTPException(status_code=503, detail="Agent is not ready.")
 
     # --------------------------------------------------------
     # VALIDATE MESSAGE
@@ -170,114 +148,42 @@ async def chat(request: ChatRequest, x_api_key: str | None = Header(default=None
     message = request.message.strip()
 
     if not message:
-
-        raise HTTPException(
-            status_code=400,
-            detail="Message cannot be empty."
-        )
+        raise HTTPException(status_code=400, detail="Message cannot be empty.")
 
     # --------------------------------------------------------
-    # GET OR CREATE SESSION
+    # SESSION ID
     # --------------------------------------------------------
+    #
+    # No session_id supplied -> this is a new conversation, generate one.
+    # A session_id IS supplied -> just use it. If it happens to have no
+    # history yet (new, mistyped, or from a previous server run before
+    # this feature existed), it simply starts empty -- there is nothing
+    # to "not find" the way there was with the old in-memory store.
 
-    session_id = request.session_id
-
-    # No session ID means this is a new conversation.
-    if session_id is None:
-
-        session_id = await session_manager.create_session()
-
-    # Existing session ID must belong to an active session.
-    else:
-
-        exists = await session_manager.session_exists(
-            session_id
-        )
-
-        if not exists:
-
-            raise HTTPException(
-                status_code=404,
-                detail="Session not found."
-            )
-
-    # --------------------------------------------------------
-    # RATE LIMIT THIS SESSION
-    # --------------------------------------------------------
-
-    allowed = await session_manager.check_rate_limit(session_id)
-    if not allowed:
-        raise HTTPException(
-            status_code=429,
-            detail=(
-                f"Too many requests for this session. Limit is "
-                f"{config.MAX_REQUESTS_PER_SESSION_PER_MINUTE} per minute."
-            ),
-        )
-
-    # --------------------------------------------------------
-    # GET THE LOCK FOR THIS SESSION
-    # --------------------------------------------------------
-
-    try:
-        session_lock = await session_manager.get_session_lock(
-            session_id
-        )
-    except ValueError:
-        # Narrow race: session expired/was deleted between the
-        # exists-check above and this call.
-        raise HTTPException(status_code=404, detail="Session not found.")
+    session_id = request.session_id or db_history.new_session_id()
 
     # --------------------------------------------------------
     # PROCESS THIS CONVERSATION
     # --------------------------------------------------------
-    #
-    # Different sessions have different locks and therefore
-    # can execute concurrently.
-    #
-    # Requests belonging to the SAME session are processed
-    # sequentially so conversation ordering is preserved.
-    #
 
-    async with session_lock:
+    async with _lock:
 
-        # Get history belonging ONLY to this session.
-        history = await session_manager.get_history(
-            session_id
-        )
-
-        # Send this session's history to the shared agent.
         try:
-            response = await ask(
-                _agent,
-                message,
-                history
-            )
+            history = db_history.get_history(session_id)
+            response = await ask(_agent, message, history)
+            db_history.append_turn(session_id, message, response)
         except RateLimitError as e:
             logger.error(f"[session={session_id}] OpenAI rate limit hit: {e}")
             raise HTTPException(
                 status_code=503,
                 detail="The assistant is currently busy. Please try again in a moment.",
             )
-        except Exception as e:
+        except Exception:
             logger.exception(f"[session={session_id}] Unexpected error handling chat request")
             raise HTTPException(
                 status_code=500,
                 detail="Something went wrong while processing your message. Please try again.",
             )
-
-        # Save the new turn to THIS session.
-        try:
-            await session_manager.append_turn(
-                session_id,
-                message,
-                response
-            )
-        except ValueError:
-            # Session was deleted mid-request (very narrow race). The
-            # user still gets their real answer below; it just won't
-            # be remembered for a follow-up message.
-            logger.warning(f"[session={session_id}] Session vanished before turn could be saved.")
 
     # --------------------------------------------------------
     # RETURN
@@ -290,15 +196,14 @@ async def chat(request: ChatRequest, x_api_key: str | None = Header(default=None
 
 
 # ============================================================
-# SESSION COUNT
+# SESSION COUNT (admin/debug)
 # ============================================================
 
 @app.get("/sessions/count")
 async def session_count(x_api_key: str | None = Header(default=None)):
     await verify_api_key(x_api_key)
-    count = await session_manager.session_count()
     return {
-        "active_sessions": count
+        "total_conversations_ever_stored": db_history.session_count()
     }
 
 

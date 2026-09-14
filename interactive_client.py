@@ -1,3 +1,18 @@
+"""
+Interactive terminal client for api_server.py.
+
+Since chat history is now saved in MySQL (see db_history.py), a
+conversation is no longer lost when you close this script or restart
+the server. To continue a previous conversation, pass its session_id
+as a command-line argument:
+
+    python interactive_client.py
+        -> starts a brand new conversation, prints its session_id
+
+    python interactive_client.py 3f2a1c9e-...-b8d1
+        -> resumes that exact conversation, with full history intact
+"""
+import sys
 import requests
 
 API_URL = "http://localhost:8000/chat"
@@ -5,9 +20,11 @@ API_KEY = "fb098eccc1aaaddbc5d259ae478789e18e064a356f936171c8c8fa8b81772afc"
 
 
 def main():
-    session_id = None
+    session_id = sys.argv[1] if len(sys.argv) > 1 else None
 
-    print("Connected to the multi-user API server.")
+    print("Connected to the API server.")
+    if session_id:
+        print(f"Resuming session: {session_id}")
     print("Type a message and press Enter. Type 'exit' to quit.\n")
 
     while True:
@@ -41,7 +58,8 @@ def main():
 
         if session_id is None:
             session_id = data["session_id"]
-            print(f"[This terminal's session_id: {session_id}]\n")
+            print(f"[This conversation's session_id: {session_id}]")
+            print(f"[Save this to resume later: python interactive_client.py {session_id}]\n")
 
         print(f"Assistant: {data['response']}\n")
 
