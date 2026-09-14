@@ -15,11 +15,7 @@ def _get_connection():
 
 
 def init_db():
-    """
-    Creates the chat_history table if it doesn't already exist.
-    Safe to call every time the server starts -- it will not touch or
-    erase any existing rows.
-    """
+    #Creates the chat_history table if it doesn't already exist.
     conn = _get_connection()
     cursor = conn.cursor()
     cursor.execute("""
@@ -38,20 +34,12 @@ def init_db():
 
 
 def new_session_id() -> str:
-    """Generates a fresh, random conversation identifier."""
+    #Generates a fresh, random conversation identifier.
     return str(uuid.uuid4())
 
 
 def get_history(session_id: str) -> list:
-    """
-    Returns this session's full conversation so far, oldest message
-    first, already shaped the way brain.py's ask() expects:
-        [{"role": "user", "content": "..."}, {"role": "assistant", ...}, ...]
-
-    If session_id has no rows yet (new, or simply unknown), this
-    returns an empty list rather than raising an error -- a fresh
-    conversation just starts with no history, the same as before.
-    """
+        # Retrieves a session's full chat history from the database in chronological order and formats it for the AI agent.
     conn = _get_connection()
     cursor = conn.cursor(dictionary=True)
     cursor.execute(
@@ -65,8 +53,7 @@ def get_history(session_id: str) -> list:
 
 
 def append_turn(session_id: str, user_message: str, assistant_message: str):
-    """Saves both halves of one exchange (the user's message and the
-    assistant's reply) as two rows, permanently."""
+        # Saves both the user's message and the assistant's reply into the database as a single conversation turn.
     conn = _get_connection()
     cursor = conn.cursor()
     cursor.execute(
@@ -83,7 +70,7 @@ def append_turn(session_id: str, user_message: str, assistant_message: str):
 
 
 def session_count() -> int:
-    """Number of distinct conversations ever stored (for the admin endpoint)."""
+
     conn = _get_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT COUNT(DISTINCT session_id) FROM chat_history")

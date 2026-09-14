@@ -1,17 +1,6 @@
-"""
-Interactive terminal client for api_server.py.
-
-Since chat history is now saved in MySQL (see db_history.py), a
-conversation is no longer lost when you close this script or restart
-the server. To continue a previous conversation, pass its session_id
-as a command-line argument:
-
-    python interactive_client.py
-        -> starts a brand new conversation, prints its session_id
-
-    python interactive_client.py 3f2a1c9e-...-b8d1
-        -> resumes that exact conversation, with full history intact
-"""
+#python interactive_client.py -> starts a brand new conversation, prints its session_id
+#python interactive_client.py 3f2a1c9e-...-b8d1 -> resumes that exact conversation, with full history intact
+        
 import sys
 import requests
 
