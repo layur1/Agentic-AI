@@ -16,6 +16,7 @@ from langchain_chroma import Chroma
 from langchain_huggingface import HuggingFaceEmbeddings
 
 import config
+import cache
 
 
 mcp = FastMCP("pdf-server")
@@ -62,15 +63,22 @@ def search_pdf(query: str) -> str:
     if not query or not query.strip():
         return "A search query is required."
 
+    normalized_query = query.strip()
+    cached_result = cache.get("search_pdf", normalized_query)
+    if cached_result is not None:
+        return cached_result
+
     documents = _retriever.invoke(
-        query.strip()
+        normalized_query
     )
 
     if not documents:
-        return (
+        result = (
             "No relevant information was found in "
             "the product documentation."
         )
+        cache.set("search_pdf", result, normalized_query)
+        return result
 
     results = []
 
@@ -97,7 +105,9 @@ def search_pdf(query: str) -> str:
             f"{document.page_content}"
         )
 
-    return "\n\n".join(results)
+    result = "\n\n".join(results)
+    cache.set("search_pdf", result, normalized_query)
+    return result
 
 
 # ============================================================

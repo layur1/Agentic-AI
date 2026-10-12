@@ -17,6 +17,7 @@ from mcp.server.fastmcp import FastMCP
 import mysql.connector
 
 import config
+import cache
 
 
 mcp = FastMCP("mysql-server")
@@ -207,6 +208,11 @@ def get_price(product_name: str) -> str:
     if not product_name or not product_name.strip():
         return "A product name is required."
 
+    normalized_name = product_name.strip()
+    cached_result = cache.get("get_price", normalized_name)
+    if cached_result is not None:
+        return cached_result
+
     with _db_cursor() as (
         connection,
         cursor
@@ -214,16 +220,18 @@ def get_price(product_name: str) -> str:
 
         product, error = _find_unique_product(
             cursor,
-            product_name.strip()
+            normalized_name
         )
 
         if error:
             return error
 
-        return (
+        result = (
             f"{product[1]} currently costs "
             f"{float(product[2]):,.2f}."
         )
+        cache.set("get_price", result, normalized_name)
+        return result
 
 
 @mcp.tool(
@@ -239,6 +247,11 @@ def check_stock(product_name: str) -> str:
     if not product_name or not product_name.strip():
         return "A product name is required."
 
+    normalized_name = product_name.strip()
+    cached_result = cache.get("check_stock", normalized_name)
+    if cached_result is not None:
+        return cached_result
+
     with _db_cursor() as (
         connection,
         cursor
@@ -246,7 +259,7 @@ def check_stock(product_name: str) -> str:
 
         product, error = _find_unique_product(
             cursor,
-            product_name.strip()
+            normalized_name
         )
 
         if error:
@@ -256,14 +269,17 @@ def check_stock(product_name: str) -> str:
 
         if stock > 0:
 
-            return (
+            result = (
                 f"{product[1]} is currently in stock. "
                 f"Available quantity: {stock}."
             )
+        else:
+            result = (
+                f"{product[1]} is currently out of stock."
+            )
 
-        return (
-            f"{product[1]} is currently out of stock."
-        )
+        cache.set("check_stock", result, normalized_name)
+        return result
 
 
 @mcp.tool(
@@ -279,12 +295,17 @@ def search_products(query: str) -> str:
     if not query or not query.strip():
         return "A search query is required."
 
+    normalized_query = query.strip()
+    cached_result = cache.get("search_products", normalized_query)
+    if cached_result is not None:
+        return cached_result
+
     with _db_cursor() as (
         connection,
         cursor
     ):
 
-        search_value = f"%{query.strip()}%"
+        search_value = f"%{normalized_query}%"
 
         cursor.execute(
             """
@@ -316,7 +337,9 @@ def search_products(query: str) -> str:
                 f"Stock: {row[3]}"
             )
 
-        return "\n".join(results)
+        result = "\n".join(results)
+        cache.set("search_products", result, normalized_query)
+        return result
 
 
 @mcp.tool(
@@ -343,6 +366,14 @@ def get_products_by_price_range(
             "the maximum price."
         )
 
+    cached_result = cache.get(
+        "get_products_by_price_range",
+        min_price,
+        max_price,
+    )
+    if cached_result is not None:
+        return cached_result
+
     with _db_cursor() as (
         connection,
         cursor
@@ -365,11 +396,13 @@ def get_products_by_price_range(
 
         if not rows:
 
-            return (
+            result = (
                 f"No products were found between "
                 f"{min_price:,.2f} and "
                 f"{max_price:,.2f}."
             )
+            cache.set("get_products_by_price_range", result, min_price, max_price)
+            return result
 
         results = []
 
@@ -382,7 +415,9 @@ def get_products_by_price_range(
                 f"Stock: {row[3]}"
             )
 
-        return "\n".join(results)
+        result = "\n".join(results)
+        cache.set("get_products_by_price_range", result, min_price, max_price)
+        return result
 
 
 # ============================================================
@@ -402,6 +437,11 @@ def get_user_address(user_name: str) -> str:
     if not user_name or not user_name.strip():
         return "A customer name is required."
 
+    normalized_name = user_name.strip()
+    cached_result = cache.get("get_user_address", normalized_name)
+    if cached_result is not None:
+        return cached_result
+
     with _db_cursor() as (
         connection,
         cursor
@@ -409,16 +449,18 @@ def get_user_address(user_name: str) -> str:
 
         customer, error = _find_unique_customer(
             cursor,
-            user_name.strip()
+            normalized_name
         )
 
         if error:
             return error
 
-        return (
+        result = (
             f"{customer[1]}'s address is: "
             f"{customer[2]}"
         )
+        cache.set("get_user_address", result, normalized_name)
+        return result
 
 
 @mcp.tool(
@@ -434,12 +476,17 @@ def search_customers(query: str) -> str:
     if not query or not query.strip():
         return "A customer search query is required."
 
+    normalized_query = query.strip()
+    cached_result = cache.get("search_customers", normalized_query)
+    if cached_result is not None:
+        return cached_result
+
     with _db_cursor() as (
         connection,
         cursor
     ):
 
-        search_value = f"%{query.strip()}%"
+        search_value = f"%{normalized_query}%"
 
         cursor.execute(
             """
@@ -456,10 +503,12 @@ def search_customers(query: str) -> str:
         if not rows:
             return "No matching customers were found."
 
-        return "\n".join(
+        result = "\n".join(
             row[0]
             for row in rows
         )
+        cache.set("search_customers", result, normalized_query)
+        return result
 
 
 @mcp.tool(
@@ -498,10 +547,12 @@ def add_new_customer(
 
         connection.commit()
 
-        return (
-            f"Customer '{name.strip()}' "
-            "was successfully added."
-        )
+    cache.invalidate_tool("search_customers")
+    cache.invalidate_tool("get_user_address")
+    return (
+        f"Customer '{name.strip()}' "
+        "was successfully added."
+    )
 
 
 # ============================================================
@@ -583,10 +634,11 @@ def schedule_delivery(
 
         connection.commit()
 
-        return (
-            f"Delivery scheduled for {customer[1]}: "
-            f"{product[1]} on {date_value}."
-        )
+    cache.invalidate_tool("get_delivery_status")
+    return (
+        f"Delivery scheduled for {customer[1]}: "
+        f"{product[1]} on {date_value}."
+    )
 
 
 @mcp.tool(
@@ -603,6 +655,11 @@ def get_delivery_status(customer_name: str) -> str:
 
         return "Customer name is required."
 
+    normalized_name = customer_name.strip()
+    cached_result = cache.get("get_delivery_status", normalized_name)
+    if cached_result is not None:
+        return cached_result
+
     _ensure_deliveries_table()
 
     with _db_cursor() as (
@@ -612,7 +669,7 @@ def get_delivery_status(customer_name: str) -> str:
 
         customer, error = _find_unique_customer(
             cursor,
-            customer_name.strip()
+            normalized_name
         )
 
         if error:
@@ -632,20 +689,24 @@ def get_delivery_status(customer_name: str) -> str:
 
         if not rows:
 
-            return (
+            result = (
                 f"No scheduled deliveries were found "
                 f"for {customer[1]}."
             )
+            cache.set("get_delivery_status", result, normalized_name)
+            return result
 
         results = [
             f"{row[0]} — {row[1]}"
             for row in rows
         ]
 
-        return (
+        result = (
             f"Scheduled deliveries for {customer[1]}:\n"
             + "\n".join(results)
         )
+        cache.set("get_delivery_status", result, normalized_name)
+        return result
 
 
 @mcp.tool(
@@ -741,10 +802,11 @@ def cancel_delivery(
 
         connection.commit()
 
-        return (
-            f"The delivery of {product[1]} for "
-            f"{customer[1]} was cancelled."
-        )
+    cache.invalidate_tool("get_delivery_status")
+    return (
+        f"The delivery of {product[1]} for "
+        f"{customer[1]} was cancelled."
+    )
 
 
 # ============================================================
