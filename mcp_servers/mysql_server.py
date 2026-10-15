@@ -17,7 +17,6 @@ from mcp.server.fastmcp import FastMCP
 import mysql.connector
 
 import config
-import cache
 
 
 mcp = FastMCP("mysql-server")
@@ -209,9 +208,6 @@ def get_price(product_name: str) -> str:
         return "A product name is required."
 
     normalized_name = product_name.strip()
-    cached_result = cache.get("get_price", normalized_name)
-    if cached_result is not None:
-        return cached_result
 
     with _db_cursor() as (
         connection,
@@ -230,7 +226,6 @@ def get_price(product_name: str) -> str:
             f"{product[1]} currently costs "
             f"{float(product[2]):,.2f}."
         )
-        cache.set("get_price", result, normalized_name)
         return result
 
 
@@ -248,9 +243,6 @@ def check_stock(product_name: str) -> str:
         return "A product name is required."
 
     normalized_name = product_name.strip()
-    cached_result = cache.get("check_stock", normalized_name)
-    if cached_result is not None:
-        return cached_result
 
     with _db_cursor() as (
         connection,
@@ -278,7 +270,6 @@ def check_stock(product_name: str) -> str:
                 f"{product[1]} is currently out of stock."
             )
 
-        cache.set("check_stock", result, normalized_name)
         return result
 
 
@@ -296,9 +287,6 @@ def search_products(query: str) -> str:
         return "A search query is required."
 
     normalized_query = query.strip()
-    cached_result = cache.get("search_products", normalized_query)
-    if cached_result is not None:
-        return cached_result
 
     with _db_cursor() as (
         connection,
@@ -336,9 +324,8 @@ def search_products(query: str) -> str:
                 f"Price: {float(row[2]):,.2f} | "
                 f"Stock: {row[3]}"
             )
-
         result = "\n".join(results)
-        cache.set("search_products", result, normalized_query)
+        result = "\n".join(results)
         return result
 
 
@@ -365,14 +352,6 @@ def get_products_by_price_range(
             "The minimum price cannot be greater than "
             "the maximum price."
         )
-
-    cached_result = cache.get(
-        "get_products_by_price_range",
-        min_price,
-        max_price,
-    )
-    if cached_result is not None:
-        return cached_result
 
     with _db_cursor() as (
         connection,
@@ -401,7 +380,6 @@ def get_products_by_price_range(
                 f"{min_price:,.2f} and "
                 f"{max_price:,.2f}."
             )
-            cache.set("get_products_by_price_range", result, min_price, max_price)
             return result
 
         results = []
@@ -414,9 +392,8 @@ def get_products_by_price_range(
                 f"Price: {float(row[2]):,.2f} | "
                 f"Stock: {row[3]}"
             )
-
         result = "\n".join(results)
-        cache.set("get_products_by_price_range", result, min_price, max_price)
+        result = "\n".join(results)
         return result
 
 
@@ -438,9 +415,6 @@ def get_user_address(user_name: str) -> str:
         return "A customer name is required."
 
     normalized_name = user_name.strip()
-    cached_result = cache.get("get_user_address", normalized_name)
-    if cached_result is not None:
-        return cached_result
 
     with _db_cursor() as (
         connection,
@@ -459,7 +433,6 @@ def get_user_address(user_name: str) -> str:
             f"{customer[1]}'s address is: "
             f"{customer[2]}"
         )
-        cache.set("get_user_address", result, normalized_name)
         return result
 
 
@@ -477,9 +450,6 @@ def search_customers(query: str) -> str:
         return "A customer search query is required."
 
     normalized_query = query.strip()
-    cached_result = cache.get("search_customers", normalized_query)
-    if cached_result is not None:
-        return cached_result
 
     with _db_cursor() as (
         connection,
@@ -507,7 +477,6 @@ def search_customers(query: str) -> str:
             row[0]
             for row in rows
         )
-        cache.set("search_customers", result, normalized_query)
         return result
 
 
@@ -547,8 +516,6 @@ def add_new_customer(
 
         connection.commit()
 
-    cache.invalidate_tool("search_customers")
-    cache.invalidate_tool("get_user_address")
     return (
         f"Customer '{name.strip()}' "
         "was successfully added."
@@ -634,7 +601,6 @@ def schedule_delivery(
 
         connection.commit()
 
-    cache.invalidate_tool("get_delivery_status")
     return (
         f"Delivery scheduled for {customer[1]}: "
         f"{product[1]} on {date_value}."
@@ -652,13 +618,9 @@ def schedule_delivery(
 def get_delivery_status(customer_name: str) -> str:
 
     if not customer_name or not customer_name.strip():
-
         return "Customer name is required."
 
     normalized_name = customer_name.strip()
-    cached_result = cache.get("get_delivery_status", normalized_name)
-    if cached_result is not None:
-        return cached_result
 
     _ensure_deliveries_table()
 
@@ -693,7 +655,6 @@ def get_delivery_status(customer_name: str) -> str:
                 f"No scheduled deliveries were found "
                 f"for {customer[1]}."
             )
-            cache.set("get_delivery_status", result, normalized_name)
             return result
 
         results = [
@@ -705,7 +666,6 @@ def get_delivery_status(customer_name: str) -> str:
             f"Scheduled deliveries for {customer[1]}:\n"
             + "\n".join(results)
         )
-        cache.set("get_delivery_status", result, normalized_name)
         return result
 
 
@@ -802,7 +762,6 @@ def cancel_delivery(
 
         connection.commit()
 
-    cache.invalidate_tool("get_delivery_status")
     return (
         f"The delivery of {product[1]} for "
         f"{customer[1]} was cancelled."
